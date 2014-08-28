@@ -1,0 +1,5 @@
+cluster1.csv,1,Fine0-MA
+cluster2.csv,2,Fine1-MA
+cluster3.csv,3,Fine2-NA
+cluster4.csv,4,Fine3-HA
+cluster5.csv,5,Coarse-dust
