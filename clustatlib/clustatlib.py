@@ -16,16 +16,15 @@ class clustat:
         # 创建数据表
         self.__cursor.execute('DROP TABLE IF EXISTS records')
         self.__cursor.execute('''CREATE TABLE records
-            (site TEXT, dt TEXT, cluster INTEGER,
+            (site TEXT, dt TEXT, cluster INTEGER, aot440 REAL,
             refr440 REAL, refr675 REAL, refr870 REAL, refr1020 REAL,
             refi440 REAL, refi675 REAL, refi870 REAL, refi1020 REAL,
-            volmedianradf REAL, stddevf REAL, volconf REAL,
-            volmedianradc REAL, stddevc REAL, volconc REAL,
-            ssa440 REAL, ssa675 REAL, ssa870 REAL, ssa1020 REAL,
-            asy440 REAL, asy675 REAL, asy870 REAL, asy1020 REAL,
-            skyerror REAL, sphericity REAL,
-            aot1020 REAL, aot870 REAL, aot675 REAL, aot440 REAL,
-            water REAL)''')
+            volconf REAL, volmedianradf REAL, stddevf REAL, 
+            volconc REAL, volmedianradc REAL, stddevc REAL, 
+            ssa675 REAL, ssa870 REAL, ssa1020 REAL,
+            asy440 REAL, asy675 REAL, asy870 REAL, 
+            sphericity REAL, skyerror REAL, 
+            ssa440 REAL, asy1020 REAL)''')
         #self.__cursor.execute('DROP TABLE IF EXISTS mh')
         #self.__cursor.execute('''CREATE TABLE mh (month TEXT)''')
         #for m in range(1, 13):
@@ -48,10 +47,13 @@ class clustat:
             for line in datafile:
                 fields = line.split(',')
                 # 将站点、时间（由日期和时间组合）和聚类编号拼成VALUES参数
-                dt = "%s %s" % (fields[1], fields[2])
+                #dt = "%s %s" % (fields[1], fields[2])
+                # 将站点、日期和聚类编号拼成VALUES参数
+                dt = fields[1]
+                #print(dt)
                 # 将日期转换为标准格式 YYYY-mm-DDTHH:MM:SS
                 head = "'%s','%s',%d" % (fields[0], parser.parse(dt).isoformat(), clusterno)
-                data = [fields[i] for i in range(3, 32)]
+                data = [fields[i] for i in range(2, 27)]
                 value = "(%s)" % ",".join((head, ",".join(data)))
                 #print(value)
                 # 插入数据
@@ -219,8 +221,8 @@ class clustat:
                 AVG(volmedianradc), AVG(stddevc), AVG(volconc),
                 AVG(ssa440), AVG(ssa675), AVG(ssa870), AVG(ssa1020),
                 AVG(asy440), AVG(asy675), AVG(asy870), AVG(asy1020),
-                AVG(aot440), AVG(aot675), AVG(aot870), AVG(aot1020),
-                AVG(skyerror), AVG(sphericity), AVG(water)
+                AVG(aot440),
+                AVG(skyerror), AVG(sphericity)
         FROM records
         GROUP BY cluster''')
         all = self.__cursor.fetchall()
@@ -235,8 +237,8 @@ class clustat:
                 STDEV(volmedianradc), STDEV(stddevc), STDEV(volconc),
                 STDEV(ssa440), STDEV(ssa675), STDEV(ssa870), STDEV(ssa1020),
                 STDEV(asy440), STDEV(asy675), STDEV(asy870), STDEV(asy1020),
-                STDEV(aot440), STDEV(aot675), STDEV(aot870), STDEV(aot1020),
-                STDEV(skyerror), STDEV(sphericity), STDEV(water)
+                STDEV(aot440),
+                STDEV(skyerror), STDEV(sphericity)
         FROM records
         GROUP BY cluster''')
         all = self.__cursor.fetchall()
