@@ -60,7 +60,7 @@ class csvbuilder:
             outfile.write('\n'.join((header, content)))
         
     def type_stat_csv(self):
-        header = "type,refr440,refr675,refr870,refr1020,refi440,refi675,refi870,refi1020,volmedianradf,stddevf,volconf,volmedianradc,stddevc,volconc,ssa440,ssa675,ssa870,ssa1020,asy440,asy675,asy870,asy1020,aot440,aot675,aot870,aot1020,skyerror,sphericity,water"
+        header = "type,refr440,refr675,refr870,refr1020,refi440,refi675,refi870,refi1020,volmedianradf,stddevf,volconf,volmedianradc,stddevc,volconc,ssa675,ssa870,ssa1020,asy440,asy675,asy870,sphericity"
         list1 = self.cs.type_means()
         list2 = self.cs.type_stddev()
         l = []
@@ -73,3 +73,16 @@ class csvbuilder:
         with open("csv/type_stat.csv", 'w') as outfile:
             outfile.write('\n'.join((header, content)))
         
+    def distances_csv(self):
+        clus, dist_mat = self.cs.all_distances()
+        header = "," + ",".join([str(cid) for cid in clus])
+        lines = []
+        first = 1
+        cur = 0
+        for clu in clus:
+            lines.append(str(clu) + ',' * first + ','.join(str(d) for d in dist_mat[cur:cur+len(clus)-first+1]))
+            cur += len(clus) - first + 1
+            first += 1
+        content = '\n'.join(lines)
+        with open("csv/distance_stat.csv", 'w') as outfile:
+            outfile.write('\n'.join((header, content)))

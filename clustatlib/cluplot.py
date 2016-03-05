@@ -160,14 +160,14 @@ class ploter:
             bottom='on', top='off', left='on', right='off') # 隐藏上方和右方的刻度
         plt.axis([400, 1100, self.ssa_range[0], self.ssa_range[1]])
         ## 绘图
-        x = [440, 675, 870, 1020]
+        x = [675, 870, 1020]
         for i in range(len(means)):
             mean = means[i]
             stddev = stddevs[i]
-            ssa440 = mean[15]; ssa675 = mean[16]; ssa870 = mean[17]; ssa1020 = mean[18];
-            sd440 = stddev[15]; sd675 = stddev[16]; sd870 = stddev[17]; sd1020 = stddev[18];
-            y = [ssa440, ssa675, ssa870, ssa1020]
-            error = [sd440, sd675, sd870, sd1020]
+            ssa675 = mean[16]; ssa870 = mean[17]; ssa1020 = mean[18];
+            sd675 = stddev[16]; sd870 = stddev[17]; sd1020 = stddev[18];
+            y = [ssa675, ssa870, ssa1020]
+            error = [sd675, sd870, sd1020]
             plt.errorbar(x, y, yerr=error, fmt='-o', color=colors[i])
         plt.xlabel("Wavelength (nm)")
         plt.ylabel("Single Scattering Albedo")
@@ -197,14 +197,14 @@ class ploter:
             bottom='on', top='off', left='on', right='off') # 隐藏上方和右方的刻度
         plt.axis([400, 1100, self.asy_range[0], self.asy_range[1]])
         ## 绘图
-        x = [440, 675, 870, 1020]
+        x = [440, 675, 870]
         for i in range(len(means)):
             mean = means[i]
             stddev = stddevs[i]
-            asy440 = mean[19]; asy675 = mean[20]; asy870 = mean[21]; asy1020 = mean[22];
-            sd440 = stddev[19]; sd675 = stddev[20]; sd870 = stddev[21]; sd1020 = stddev[22];
-            y = [asy440, asy675, asy870, asy1020]
-            error = [sd440, sd675, sd870, sd1020]
+            asy440 = mean[19]; asy675 = mean[20]; asy870 = mean[21];
+            sd440 = stddev[19]; sd675 = stddev[20]; sd870 = stddev[21];
+            y = [asy440, asy675, asy870]
+            error = [sd440, sd675, sd870]
             plt.errorbar(x, y, yerr=error, fmt='-o', color=colors[i])
         plt.xlabel("Wavelength (nm)")
         plt.ylabel("Asymmertry Parameter")

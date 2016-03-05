@@ -32,19 +32,20 @@ def main():
     print("读取文件并填充数据库……")
     for file in files:
         cs.insert_from_file(file[0], file[1])
+    cs.insert_normalized_values()
     #cs.type_stddev()
     #exit()
     ## 生成图片
-    print("生成图片……")
-    ploter = cluplot.ploter(cs, legends)
-    ploter.distribution_img()
-    ploter.ssa_img()
-    ploter.asy_img()
-    ploter.month_percentage_img()
-    ploter.year_percentage_img(2001, 2012)
-    for site in sites:
-        ploter.month_percentage_img(site)
-        ploter.year_percentage_img(2001, 2012, site)
+    #print("生成图片……")
+    #ploter = cluplot.ploter(cs, legends)
+    #ploter.distribution_img()
+    #ploter.ssa_img()
+    #ploter.asy_img()
+    #ploter.month_percentage_img()
+    #ploter.year_percentage_img(2001, 2012)
+    #for site in sites:
+    #    ploter.month_percentage_img(site)
+    #    ploter.year_percentage_img(2001, 2012, site)
     ## 生成统计表
     print("生成统计表……")
     csvb = clucsv.csvbuilder(cs)
@@ -53,6 +54,7 @@ def main():
     csvb.type_stat_csv()
     csvb.month_type_csv()
     csvb.year_type_csv(2001, 2012)
+    #csvb.distances_csv()
     for site in sites:
         csvb.month_type_csv(site)
         csvb.year_type_csv(2001, 2012, site)

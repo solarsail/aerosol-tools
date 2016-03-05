@@ -15,16 +15,25 @@ class clustat:
         self.__sqlite_conn.create_aggregate("stdev", 1, pystaggrelite3.stdev)
         # 创建数据表
         self.__cursor.execute('DROP TABLE IF EXISTS records')
+        self.__cursor.execute('DROP TABLE IF EXISTS normalized')
         self.__cursor.execute('''CREATE TABLE records
-            (site TEXT, dt TEXT, cluster INTEGER, aot440 REAL,
+            (site TEXT, dt TEXT, cluster INTEGER,
             refr440 REAL, refr675 REAL, refr870 REAL, refr1020 REAL,
             refi440 REAL, refi675 REAL, refi870 REAL, refi1020 REAL,
-            volconf REAL, volmedianradf REAL, stddevf REAL, 
-            volconc REAL, volmedianradc REAL, stddevc REAL, 
+            volmedianradf REAL, stddevf REAL, volconf REAL, 
+            volmedianradc REAL, stddevc REAL, volconc REAL, 
             ssa675 REAL, ssa870 REAL, ssa1020 REAL,
             asy440 REAL, asy675 REAL, asy870 REAL, 
-            sphericity REAL, skyerror REAL, 
-            ssa440 REAL, asy1020 REAL)''')
+            sphericity REAL)''')
+        self.__cursor.execute('''CREATE TABLE normalized
+            (cluster INTEGER,
+            refr440 REAL, refr675 REAL, refr870 REAL, refr1020 REAL,
+            refi440 REAL, refi675 REAL, refi870 REAL, refi1020 REAL,
+            volmedianradf REAL, stddevf REAL, volconf REAL, 
+            volmedianradc REAL, stddevc REAL, volconc REAL, 
+            ssa675 REAL, ssa870 REAL, ssa1020 REAL,
+            asy440 REAL, asy675 REAL, asy870 REAL, 
+            sphericity REAL)''')
         #self.__cursor.execute('DROP TABLE IF EXISTS mh')
         #self.__cursor.execute('''CREATE TABLE mh (month TEXT)''')
         #for m in range(1, 13):
@@ -53,7 +62,7 @@ class clustat:
                 #print(dt)
                 # 将日期转换为标准格式 YYYY-mm-DDTHH:MM:SS
                 head = "'%s','%s',%d" % (fields[0], parser.parse(dt).isoformat(), clusterno)
-                data = [fields[i] for i in range(2, 27)]
+                data = [fields[i] for i in range(2, 23)]
                 value = "(%s)" % ",".join((head, ",".join(data)))
                 #print(value)
                 # 插入数据
@@ -61,6 +70,26 @@ class clustat:
         # 提交事务
         self.__sqlite_conn.commit()
 
+    def insert_normalized_values(self):
+        avg = self.all_means()
+        sd = self.all_stddev()
+        self.__cursor.execute('''
+        SELECT cluster,
+                refr440, refr675, refr870, refr1020,
+                refi440, refi675, refi870, refi1020,
+                volmedianradf, stddevf, volconf,
+                volmedianradc, stddevc, volconc,
+                ssa675, ssa870, ssa1020,
+                asy440, asy675, asy870,
+                sphericity
+        FROM records''')
+        all = self.__cursor.fetchall()
+        for row in all:
+            values = [(row[i+1]-avg[i])/sd[i] for i in range(len(avg))]
+            valuestr = "(%d,%s)" % (row[0], ",".join([str(v) for v in values]))
+            self.__cursor.execute("INSERT INTO normalized VALUES %s" % valuestr)
+        self.__sqlite_conn.commit()
+        
     def month_type_stat(self, site = None):
         '''12个月各类别总数与所占百分比'''
         if site != None:
@@ -147,6 +176,12 @@ class clustat:
                 # 数据早于开始年
                 while int(all[index][1]) < start_year:
                     index += 1
+                    if index == len(all):
+                        break;
+                if index == len(all):
+                    values.append(0)
+                    percents.append(0)
+                    continue
                     #print("earlier")
                     #print("index: %d, rec year: %s, year: %d" % (index, all[index][1], y))
                 # 正常匹配
@@ -212,6 +247,19 @@ class clustat:
             l.append(row)
         return l, types
 
+    def all_means(self):
+        self.__cursor.execute('''
+        SELECT  AVG(refr440), AVG(refr675), AVG(refr870), AVG(refr1020),
+                AVG(refi440), AVG(refi675), AVG(refi870), AVG(refi1020),
+                AVG(volmedianradf), AVG(stddevf), AVG(volconf),
+                AVG(volmedianradc), AVG(stddevc), AVG(volconc),
+                AVG(ssa675), AVG(ssa870), AVG(ssa1020),
+                AVG(asy440), AVG(asy675), AVG(asy870),
+                AVG(sphericity)
+        FROM records''')
+        all = self.__cursor.fetchall()
+        return all[0]
+        
     def type_means(self):
         self.__cursor.execute('''
         SELECT cluster,
@@ -219,15 +267,27 @@ class clustat:
                 AVG(refi440), AVG(refi675), AVG(refi870), AVG(refi1020),
                 AVG(volmedianradf), AVG(stddevf), AVG(volconf),
                 AVG(volmedianradc), AVG(stddevc), AVG(volconc),
-                AVG(ssa440), AVG(ssa675), AVG(ssa870), AVG(ssa1020),
-                AVG(asy440), AVG(asy675), AVG(asy870), AVG(asy1020),
-                AVG(aot440),
-                AVG(skyerror), AVG(sphericity)
+                AVG(ssa675), AVG(ssa870), AVG(ssa1020),
+                AVG(asy440), AVG(asy675), AVG(asy870),
+                AVG(sphericity)
         FROM records
         GROUP BY cluster''')
         all = self.__cursor.fetchall()
         return all
 
+    def all_stddev(self):
+        self.__cursor.execute('''
+        SELECT  STDEV(refr440), STDEV(refr675), STDEV(refr870), STDEV(refr1020),
+                STDEV(refi440), STDEV(refi675), STDEV(refi870), STDEV(refi1020),
+                STDEV(volmedianradf), STDEV(stddevf), STDEV(volconf),
+                STDEV(volmedianradc), STDEV(stddevc), STDEV(volconc),
+                STDEV(ssa675), STDEV(ssa870), STDEV(ssa1020),
+                STDEV(asy440), STDEV(asy675), STDEV(asy870),
+                STDEV(sphericity)
+        FROM records''')
+        all = self.__cursor.fetchall()
+        return all[0]
+        
     def type_stddev(self):
         self.__cursor.execute('''
         SELECT cluster,
@@ -235,11 +295,60 @@ class clustat:
                 STDEV(refi440), STDEV(refi675), STDEV(refi870), STDEV(refi1020),
                 STDEV(volmedianradf), STDEV(stddevf), STDEV(volconf),
                 STDEV(volmedianradc), STDEV(stddevc), STDEV(volconc),
-                STDEV(ssa440), STDEV(ssa675), STDEV(ssa870), STDEV(ssa1020),
-                STDEV(asy440), STDEV(asy675), STDEV(asy870), STDEV(asy1020),
-                STDEV(aot440),
-                STDEV(skyerror), STDEV(sphericity)
+                STDEV(ssa675), STDEV(ssa870), STDEV(ssa1020),
+                STDEV(asy440), STDEV(asy675), STDEV(asy870),
+                STDEV(sphericity)
         FROM records
         GROUP BY cluster''')
         all = self.__cursor.fetchall()
         return all
+
+    def cluster_distance(self, c1, c2):
+        cols = """
+            refr440, refr675, refr870, refr1020,
+            refi440, refi675, refi870, refi1020,
+            volmedianradf, stddevf, volconf,
+            volmedianradc, stddevc, volconc,
+            ssa675, ssa870, ssa1020,
+            asy440, asy675, asy870,
+            sphericity
+        """
+        self.__cursor.execute('''
+        SELECT {0}
+        FROM normalized
+        WHERE cluster = ?
+        '''.format(cols), c1)
+        d1 = self.__cursor.fetchall()
+        self.__cursor.execute('''
+        SELECT {0}
+        FROM normalized
+        WHERE cluster = ?
+        '''.format(cols), c2)
+        d2 = self.__cursor.fetchall()
+        print("cluster {0}: {1} records - cluster {2}: {3} records".format(c1[0], len(d1), c2[0], len(d2)))
+        maxdist = 0
+        for r1 in d1:
+            for r2 in d2:
+                dist = 0
+                for i in range(21):
+                    dist += abs(r1[i] - r2[i]) # manhatten dist
+                if dist > maxdist:
+                    maxdist = dist
+        print("dist: {0}".format(maxdist))
+        return maxdist
+        
+    def all_distances(self):
+        self.__cursor.execute('''
+        SELECT DISTINCT cluster FROM records
+        ''')
+        clu_tup = self.__cursor.fetchall()
+        cluid = [id for tup in clu_tup for id in tup]
+        dists = []
+        for i in range(len(cluid)):
+            c1 = clu_tup[i]
+            for j in range(i, len(cluid)):
+                c2 = clu_tup[j]
+                dists.append(self.cluster_distance(c1, c2))
+                
+        return (cluid, dists)
+        
