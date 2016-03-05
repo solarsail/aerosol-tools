@@ -1,3 +1,0 @@
-cluster1.csv,1,Fine0-MA
-cluster2.csv,2,Coarse-dust
-cluster3.csv,3,Fine2-NA
