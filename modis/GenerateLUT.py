@@ -65,11 +65,19 @@ class LUT:
         result = c.fetchone()[0]
         return result
 	
-    def select(self,sql):
+    def select_record(self, wavelength, solar, rel, sensor):
+        query = 'SELECT type, aod, scat, FT, s, ref FROM %s where solar=? and rel=? and sensor=?' % self.table(wavelength)
         c = self.conn.cursor()
-        c.execute(sql)
-        result=c.fecthall()
-        return result        
+        c.execute(query, solar, rel, sensor)
+        result = c.fecthall()
+        return result
+        
+    def select_parameter(self, wavelength, param):
+        query = 'SELECT DISTINCT {0} FROM {1} ORDER BY {0} ASC'.format(param, self.table(wavelength))
+        c = self.conn.cursor()
+        c.execute(query)
+        result = c.fecthall()
+        return result
         
     def insert(self, aod, tag, zenith, wavelength, rt3_data):
         '''

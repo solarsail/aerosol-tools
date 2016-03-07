@@ -16,9 +16,11 @@ from pycoast import ContourWriterAGG
 from pyhdf import SD
 from pyproj import Proj
 from pyresample import kd_tree, geometry # 重采样
-from scipy.interpolate import RegularGridInterpolator as rgi
+from scipy.interpolate import RegularGridInterpolator
 import math
 import json
+import bisect
+import GenerateLUT
 
 
 offset_attr = {
@@ -86,9 +88,9 @@ def get_angle_data(L1B_obj):
         dataset = L1B_obj.select(name)
         scale = dataset.attributes()['scale_factor']
         data = dataset[:] * scale * np.pi / 180
-        data = np.repeat(data, 5, axis=1)   # 406 * 271 -> 2030 * 271
-        data = np.repeat(data, 5, axis=0)   # 2030 * 271 -> 2030 * 1355
-        data = data[:,:-1]  # 2030 * 1355 -> 2030 * 1354
+        data = np.repeat(data, 5, axis=1)   #  406 * 271  -> 2030 * 271
+        data = np.repeat(data, 5, axis=0)   # 2030 * 271  -> 2030 * 1355
+        data = data[:,:-1]                  # 2030 * 1355 -> 2030 * 1354
         angle_data.append(data)
         
     angle_data = np.dstack(angle_data)
@@ -120,10 +122,10 @@ def main():
     conf = read_conf("config.txt")
     start = time.clock()
     # 观测数据
-    hdf_L1B = glob.glob(conf['mod02-file'])
+    hdf_L1B = glob.glob(str(conf['mod02-file']))
     L1B_obj = SD.SD(hdf_L1B[0], SD.SDC.READ)
     # 观测点坐标
-    hdf_Geo = glob.glob(conf['mod03-file'])
+    hdf_Geo = glob.glob(str(conf['mod03-file']))
     GEO_obj = SD.SD(hdf_Geo[0], SD.SDC.READ)
     
     swath_def = get_swath_def(GEO_obj)
@@ -149,8 +151,7 @@ def main():
     end = time.clock()
     print(end - start)
     
-    
-    
+
 
     
 def make_mask(data_box, mask_box, width):
@@ -199,7 +200,7 @@ def dark_target(data, mask, width):
     dark_data = np.reshape(dark_data, data.shape / width)
     return dark_data
     
-def surface_reflectance(Ref212, MVI, ScatAng) :
+def surface_reflectance_066_047(Ref212, MVI, ScatAng) :
     Slope_NDVI_066_212=0.48
     if MVI > 0.75:
         Slope_NDVI_066_212 = 0.58
@@ -214,27 +215,111 @@ def surface_reflectance(Ref212, MVI, ScatAng) :
     RefSuf047 = RefSuf066 * Slope_047_066 + yint_047_066
     return RefSuf066, RefSuf047
 
-def make_interpolation_cube():
-    V = None
-    return V
+def bound(array, target):
+    loc = bisect.bisect(array, target)
+    if array[loc] == target:
+        return target, target
+    if loc == len(array) - 1: # 外插值
+        return array[loc-1], array[loc]
+    else:
+        return array[loc], array[loc+1]
+        
+def interpolate(solar_zenith, rel_azimuth, sensor_zenith, Solars, Relatives, Sensors, lut, wavelength):  
+    # 立方体各维度的上下边界
+    x = np.array(bound(Solars, solar_zenith))
+    y = np.array(bound(Relatives, solar_zenith))
+    z = np.array(bound(Sensors, solar_zenith))
+    
+    records = [None] * 8
+    for i in range(8):
+        # ix iy iz 依次为 0 0 0, 0 0 1, 0 1 0, 0 1 1, 1 0 0, 1 0 1, 1 1 0, 1 1 1
+        ix, iy, iz = [int(k) for k in list('{0:0>3b}'.format(i))]
+        records[i] = lut.select(wavelength, x[ix], y[iy], z[iz])
+        # 也就是
+        # records[1] = lut.select(wavelength, x[0], y[0], z[1])，……
+        # records[6] = lut.select(wavelength, x[1], y[1], z[0])，……
+    
+    num_types = len(records[0])     # 类型数量
+    num_fields = len(records[0][0]) # 每条记录的字段数量
+    
+    data = np.array(records)
+    # 把 data 拆成每 8 个点一组 
+    data = np.hsplit(data, num_types)
+    # 把 [[0], [1], [2], ..., [7]] 转换为 [[[0, 1], [2, 3]], [[4, 5], [6, 7]]]
+    # 其中每个数字代表一行数据
+    data = [layer.reshape(2, 2, 2, num_fields) for layer in data]
+    
+    result = []
+    for v in data:
+        fn = RegularGridInterpolator((x,y,z),v)
+        result.append(fn((solar_zenith, rel_azimuth, sensor_zenith)))
+        
+    return result
+    
 
-def interpolate(solar_zenith, rel_azimuth, sensor_zenith, cube):
-    aot = 0
+def calsurf_ref(ref_total,ref_aero,FT, s):
+    suf_ref=1/(FT/(ref_total-ref_aero)+s)
+    return suf_ref
+    
+
+def solve(solar_zenith, rel_azimuth, sensor_zenith, values2120, values440, ref_total_2120, ref_total_470, MVI, ScatAng):
+    '''
+    输出设定：
+    result[0]: 0.47um的气溶胶光学厚度
+    result[1]: 2.12um波段的地表反射率
+    result[3]: 0.47um收敛时的delta
+    result[4]: 气溶胶类型type
+    '''
+    result = [] #
+    surf_ref_2120 = []
+    surf_ref_470 = surf_ref_660 = []
+    type_2120, aot_2120, scat_2120, FT_2120, s_2120, ref_aero_2120 = values2120
+    type_470, aot_470, scat_470, FT_470, s_470, ref_aero_470 = values440
+        
+    delta=999
+    for i in range(len(ref_aero_2120)):
+        surf_ref_2120[i]=calsurf_ref(ref_total_2120,ref_aero_2120,FT_2120, s_2120)
+        surf_ref_660[i], surf_ref_470[i] = surface_reflectance_066_047(surf_ref_2120[i],MVI,ScatAng)
+        for j in range(len(ref_aero_470)): #要考虑气溶胶类型的一一对应？？？
+            simulate_ref470=ref_aero_470[j]+FT_470[j]*surf_ref_470[i]/(1-s_470[j]*surf_ref_470[i])
+            minus=math.abs(ref_total_470-simulate_ref470)
+            if minus < delta:
+                delta=minus
+                result[0]= aot_470[j]
+                result[1]= ref_aero_2120[i]
+                result[3]= delta
+                result[4]= type_470[i]
+                
+                
+            
+        
+        
+    
+    
+    
+    
     
     return aot
     
 def invert(refl, angle):
-    ndvi_124_212 = NDVI(refl[3], refl[1]) #波段顺序c1100, c212, c138, c124, c086, c066, c055, c047
-    ray_AOT047 = 0.1948
-    
+    ndvi_124_212 = NDVI(refl[3], refl[1]) #波段顺序c1100, c212, c138, c124, c086, c066, c055, c047        
     ref047 = refl[6]
-    ref124 = refl[2]
-    ref212 = refl[0]
+    ref124 = refl[3]
+    ref212 = refl[1]
     solar_zenith = angle[1]
     sensor_zenith = angle[3]
     relative_azimuth = abs(angle[2] - angle[0]) * np.pi / 180
     scatter_angle = math.acos(-math.cos(solar_zenith) * math.cos(sensor_zenith) - 
         math.sin(solar_zenith) * math.sin(sensor_zenith) * math.cos(relative_azimuth))
+    
+    lut_path = conf['lut-path']
+    lut = GenerateLUT.LUT(lut_path)
+    Solars = lut.select_parameter('solar', 2.12)
+    Relatives = lut.select_parameter('rel', 2.12)
+    Sensors = lut.select_parameter('sensor', 2.12)
+    
+    values2120 = interpolate(solar_zenith, relative_azimuth, sensor_zenith, Solars, Relatives, Sensors, 2.12)
+    values440 =  interpolate(solar_zenith, relative_azimuth, sensor_zenith, Solars, Relatives, Sensors, 0.44)
     
 
 if __name__ == '__main__':
