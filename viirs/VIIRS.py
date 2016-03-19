@@ -265,8 +265,8 @@ def draw_colorbar(image):
     
     xorg = 20
     yorg = 25
-    bar = np.linspace(1, 0, 309)
-    bar = bar.reshape(309, 1).repeat(20, 1)
+    bar = np.linspace(1, 0, 300)
+    bar = bar.reshape(300, 1).repeat(20, 1)
     bar_data = np.uint8(cm.jet(bar) * 255)
     bar_img = Image.fromarray(bar_data)
 
@@ -275,8 +275,8 @@ def draw_colorbar(image):
     legend.paste(bar_img, (xorg, yorg, bar_img.size[0]+xorg, bar_img.size[1]+yorg))
     draw = aggdraw.Draw(legend)
     for t in tick:
-        y = (AOD_MAX - t) * 308 / AOD_MAX
-        draw.line((15+xorg,y+yorg, 20+xorg,y+yorg), tick_pen)
+        y = (AOD_MAX - t) * 300 / AOD_MAX
+        draw.line((15+xorg,y+yorg-0.5, 20+xorg,y+yorg-0.5), tick_pen) # 为显示清晰的刻度线，需要绘制在半像素坐标上
         draw.text((25+xorg, y+yorg-font_size/2), str(t), font)
     draw.flush()
     
