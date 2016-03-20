@@ -56,7 +56,7 @@ def get_utm_zone(lon, lat):
 def get_proj_area(lon_min, lon_max, lat_min, lat_max, proj='merc', zone=None, scale=4000):
     '''
     计算投影范围。
-    可以使用麦卡托投影或 UTM 投影（WGS84坐标系）。
+    可以使用麦卡托投影（proj='merc'）或 UTM 投影（proj='utm'）（WGS84坐标系）。
     '''
     lon_center = int(lon_max + lon_min) / 2
     lat_center = int(lat_max + lat_min) / 2
@@ -96,21 +96,23 @@ class viirs_file:
             
         self.path = path
         self.tag = os.path.split(self.path)[1][26:34]
-        print(path)
+        self.valid = True
+        self.aot_550 = None
+        self.lat = None
+        self.lon = None
+        self.swath_def = None
+
         f = h5py.File(path, 'r')
         geo_dataset = f['/All_Data/VIIRS-Aeros-EDR-GEO_All']
+        aero_dataset = f['/All_Data/VIIRS-Aeros-EDR_All']
+        aot_550 = aero_dataset['AerosolOpticalDepth_at_550nm'].value
         self.lat = geo_dataset['Latitude'].value
         self.lon = geo_dataset['Longitude'].value
-        print("max lat: {}, min lat: {}".format(self.lat.max(), self.lat.min()))
-        # 如果经纬度有无效值，则将该文件设为无效
-        if self.lat.min() < -90 or self.lat.max() > 90:
+        # 如果数据中没有有效值，或者经纬度有无效值，则将该文件设为无效
+        if aot_550.min() >= 65528 or self.lat.min() < -90 or self.lat.max() > 90:
             self.valid = False
-            self.lat = [np.NaN,]
-            self.lon = [np.NaN,]
         else:
-            aero_dataset = f['/All_Data/VIIRS-Aeros-EDR_All']
-            aot_550 = aero_dataset['AerosolOpticalDepth_at_550nm'].value
-            self.valid = True
+            print("max lat: {}, min lat: {}".format(self.lat.max(), self.lat.min()))
             self.swath_def = geometry.SwathDefinition(lons=self.lon, lats=self.lat)
             self.aot_550 = scale(aot_550)
     
@@ -150,10 +152,10 @@ class viirs_file:
 class viirs_file_group:
     def __init__(self, filelist):
         self.files = [viirs_file(name) for name in filelist]
-        self.lat_max = max([f.lat.max() for f in self.files])
-        self.lat_min = min([f.lat.min() for f in self.files])
-        self.lon_max = max([f.lon.max() for f in self.files])
-        self.lon_min = min([f.lon.min() for f in self.files])
+        self.lat_max = max([f.lat.max() for f in self.files if f.valid])
+        self.lat_min = min([f.lat.min() for f in self.files if f.valid])
+        self.lon_max = max([f.lon.max() for f in self.files if f.valid])
+        self.lon_min = min([f.lon.min() for f in self.files if f.valid])
 
     def get_area_def(self):
         '''
@@ -169,9 +171,11 @@ class viirs_file_group:
         '''
         if area_def is None:
             area_def = self.get_area_def()
+            
         masks = []
         # 将每一个AOT填充到大的图像范围内
         for vf in self.files:
+            print('{} [{}]'.format(vf.path, 'processing' if vf.valid else 'skipped'))
             if vf.valid:
                 result = vf.reproject(area_def)
                 masks.append(result)
@@ -360,5 +364,4 @@ def main():
     print(end - start)
 
 if __name__ == '__main__':
-    #draw_colorbar(1)
     main()
