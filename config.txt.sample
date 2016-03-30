@@ -1,0 +1,14 @@
+{
+
+    "beijing":[39,116],
+
+    "viirs_path": "G:/VIIRS-china-2015/March",
+
+    "modis_path": "G:/MODIS-china-2015/modis/3",
+    "img_output_path": "G:/VIIRS-china-2015/March",
+
+    "shape_file_path": "D:/mei/shape_files",
+    "processed_file": "G:/VIIRS-china-2015/March/processed.txt",
+    "err_file": "G:/VIIRS-china-2015/March/err_file.txt",
+    "max_aod": 0.7
+}
